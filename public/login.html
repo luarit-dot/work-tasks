@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Iniciar sesión · Gestor de Tareas</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="center-screen">
+    <div class="card auth-card">
+      <h1>Gestor de Tareas</h1>
+      <p class="subtitle">Acceso del jefe de proyecto</p>
+      <form id="login-form">
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" autocomplete="current-password" autofocus />
+        <div class="error-text" id="error-text"></div>
+        <button type="submit" class="btn-primary btn-block">Entrar</button>
+      </form>
+    </div>
+  </div>
+  <script src="/js/login.js"></script>
+</body>
+</html>

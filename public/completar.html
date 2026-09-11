@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Confirmar tarea · Gestor de Tareas</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="center-screen">
+    <div class="card auth-card confirm-card" id="content" style="max-width:440px;">
+      <p>Cargando…</p>
+    </div>
+  </div>
+
+  <script>
+    const token = window.location.pathname.split('/').pop();
+    const content = document.getElementById('content');
+
+    function render(html) {
+      content.innerHTML = html;
+    }
+
+    async function loadTask() {
+      try {
+        const res = await fetch(`/api/public/task/${token}`);
+        if (!res.ok) {
+          render(`
+            <div class="confirm-icon">⚠️</div>
+            <h1>Enlace no válido</h1>
+            <p class="desc">Este enlace no es válido o ha caducado. Si crees que es un error, contacta con quien te asignó la tarea.</p>
+          `);
+          return;
+        }
+        const task = await res.json();
+
+        if (task.alreadyDone) {
+          render(`
+            <div class="confirm-icon">✅</div>
+            <h1>Ya estaba marcada como hecha</h1>
+            <p class="desc"><strong>${escapeHtml(task.title)}</strong> ya figuraba como completada. No es necesario hacer nada más.</p>
+          `);
+          return;
+        }
+
+        render(`
+          <div class="confirm-icon">📋</div>
+          <h1>${escapeHtml(task.title)}</h1>
+          ${task.description ? `<p class="desc">${escapeHtml(task.description)}</p>` : ''}
+          <p style="font-size:13px;color:#6b7280;">
+            Prioridad: <strong>${escapeHtml(task.priorityLabel)}</strong>
+            ${task.dueDate ? ` · Fecha límite: <strong>${escapeHtml(task.dueDate)}</strong>` : ''}
+          </p>
+          <button id="complete-btn" class="btn-success btn-block" style="margin-top:16px;">
+            Marcar como hecha
+          </button>
+          <div class="error-text" id="error-text"></div>
+        `);
+
+        document.getElementById('complete-btn').addEventListener('click', completeTask);
+      } catch (err) {
+        render(`<p>Error de conexión. Recarga la página para volver a intentarlo.</p>`);
+      }
+    }
+
+    async function completeTask() {
+      const btn = document.getElementById('complete-btn');
+      btn.disabled = true;
+      btn.textContent = 'Marcando...';
+      try {
+        const res = await fetch(`/api/public/complete/${token}`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) {
+          document.getElementById('error-text').textContent = data.error || 'No se pudo completar la tarea.';
+          btn.disabled = false;
+          btn.textContent = 'Marcar como hecha';
+          return;
+        }
+        render(`
+          <div class="confirm-icon">🎉</div>
+          <h1>¡Gracias!</h1>
+          <p class="desc">La tarea se ha marcado como hecha. El cuadro de mandos ya está actualizado.</p>
+        `);
+      } catch (err) {
+        document.getElementById('error-text').textContent = 'Error de conexión.';
+        btn.disabled = false;
+        btn.textContent = 'Marcar como hecha';
+      }
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str == null ? '' : str;
+      return div.innerHTML;
+    }
+
+    loadTask();
+  </script>
+</body>
+</html>
