@@ -1,5 +1,3 @@
-const nodemailer = require('nodemailer');
-
 const PRIORITY_LABELS = {
   baja: 'Baja',
   media: 'Media',
@@ -13,26 +11,15 @@ const PRIORITY_COLORS = {
   alta: '#e8590c',
   urgente: '#d6336c',
 };
-
+// Enviamos por la API HTTP de Brevo (https://api.brevo.com) en vez de SMTP.
+// Render (y la mayoría de hostings gratuitos) bloquean los puertos SMTP salientes
+// (587/465) en su plan gratuito para prevenir spam, así que una conexión SMTP directa
+// a Gmail nunca llega a completarse ahí (da "Connection timeout"). La API HTTP de Brevo
+// usa el puerto 443 normal, así que sí funciona. El remitente que se ve en el correo
+// sigue siendo tu propio Gmail (BREVO_SENDER_EMAIL), verificado como "remitente" en Brevo.
 function isMailConfigured() {
-  return Boolean(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
+  return Boolean(process.env.BREVO_API_KEY && process.env.BREVO_SENDER_EMAIL);
 }
-
-let transporter = null;
-function getTransporter() {
-  if (!isMailConfigured()) return null;
-  if (!transporter) {
-    transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
-      },
-    });
-  }
-  return transporter;
-}
-
 function formatDueDate(dueDate) {
   if (!dueDate) return 'Sin fecha límite';
   try {
@@ -42,7 +29,6 @@ function formatDueDate(dueDate) {
     return dueDate;
   }
 }
-
 function buildTaskEmailHtml({ task, member, completeUrl }) {
   const priorityLabel = PRIORITY_LABELS[task.priority] || task.priority;
   const priorityColor = PRIORITY_COLORS[task.priority] || '#4b7bec';
@@ -60,7 +46,6 @@ function buildTaskEmailHtml({ task, member, completeUrl }) {
       <div style="padding:28px;">
         <p style="margin:0 0 8px;color:#6b7280;font-size:14px;">Hola ${escapeHtml(member.name)},</p>
         <h1 style="margin:0 0 16px;font-size:20px;color:#111827;">${escapeHtml(task.title)}</h1>
-
         <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
           <tr>
             <td style="padding:4px 0;color:#6b7280;font-size:13px;width:120px;">Prioridad</td>
@@ -90,7 +75,6 @@ function buildTaskEmailHtml({ task, member, completeUrl }) {
     </div>
   </div>`;
 }
-
 function escapeHtml(str) {
   return String(str)
     .replace(/&/g, '&amp;')
@@ -98,7 +82,6 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
-
 /**
  * Envía el correo de asignación de tarea.
  * Devuelve { sent: boolean, dryRun: boolean, error?: string }
@@ -108,23 +91,35 @@ async function sendTaskAssignedEmail({ task, member, baseUrl }) {
   const html = buildTaskEmailHtml({ task, member, completeUrl });
   const fromName = process.env.MAIL_FROM_NAME || 'Gestor de Tareas';
 
-  const t = getTransporter();
-  if (!t) {
-    // Modo de prueba: no hay credenciales de Gmail configuradas.
+  if (!isMailConfigured()) {
+    // Modo de prueba: no hay credenciales de Brevo configuradas.
     // Esto permite probar toda la app en local sin enviar correos reales.
-    console.log('--- [MODO PRUEBA] No hay GMAIL_USER/GMAIL_APP_PASSWORD configurados. ---');
+    console.log('--- [MODO PRUEBA] No hay BREVO_API_KEY/BREVO_SENDER_EMAIL configurados. ---');
     console.log(`Correo que se habría enviado a: ${member.email}`);
     console.log(`Enlace para marcar como hecha: ${completeUrl}`);
     return { sent: false, dryRun: true, completeUrl };
   }
-
   try {
-    await t.sendMail({
-      from: `"${fromName}" <${process.env.GMAIL_USER}>`,
-      to: member.email,
-      subject: `Nueva tarea asignada: ${task.title}`,
-      html,
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': process.env.BREVO_API_KEY,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { name: fromName, email: process.env.BREVO_SENDER_EMAIL },
+        to: [{ email: member.email, name: member.name }],
+        subject: `Nueva tarea asignada: ${task.title}`,
+        htmlContent: html,
+      }),
     });
+
+    if (!res.ok) {
+      const bodyText = await res.text().catch(() => '');
+      throw new Error(`Brevo respondió ${res.status}: ${bodyText.slice(0, 300)}`);
+    }
+
     return { sent: true, dryRun: false, completeUrl };
   } catch (err) {
     console.error('Error enviando correo:', err.message);
