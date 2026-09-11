@@ -43,7 +43,7 @@ Abre `.env` con un editor de texto y rellena:
 - `ADMIN_PASSWORD` → la contraseña con la que entrarás al cuadro de mandos.
 - `SESSION_SECRET` → cualquier cadena larga y aleatoria (por ejemplo, generada en https://1password.com/password-generator/).
 
-Puedes dejar `GMAIL_USER` y `GMAIL_APP_PASSWORD` vacíos por ahora: la app funcionará en **modo prueba** (no envía correos reales, pero te muestra en la consola qué habría enviado y el enlace de "marcar como hecha", para que puedas probar todo el flujo).
+Puedes dejar `BREVO_API_KEY` y `BREVO_SENDER_EMAIL` vacíos por ahora: la app funcionará en **modo prueba** (no envía correos reales, pero te muestra en la consola qué habría enviado y el enlace de "marcar como hecha", para que puedas probar todo el flujo).
 
 ```bash
 npm start
@@ -53,19 +53,18 @@ Abre `http://localhost:3000`, entra con tu contraseña, añade un integrante del
 
 ---
 
-## 3. Conectar Gmail para enviar correos reales
+## 3. Conectar el envío de correos reales (Brevo)
 
-1. Entra en tu cuenta de Gmail (recomendable crear una cuenta dedicada tipo `tareas.tuequipo@gmail.com`, aunque también puedes usar tu cuenta personal).
-2. Activa la verificación en dos pasos si no la tienes ya: https://myaccount.google.com/signinoptions/two-step-verification
-3. Ve a **Contraseñas de aplicaciones**: https://myaccount.google.com/apppasswords
-4. Crea una nueva contraseña de aplicación (elige "Otra" y ponle un nombre como "Gestor de tareas"). Google te dará un código de 16 caracteres.
-5. En tu archivo `.env` (o en las variables de entorno del hosting, ver más abajo):
-   - `GMAIL_USER=` tu dirección de Gmail completa.
-   - `GMAIL_APP_PASSWORD=` el código de 16 caracteres (puedes dejarlo con o sin espacios).
+La app envía los correos a través de la **API HTTP de Brevo** (antes Sendinblue), no directamente por Gmail. El motivo: Render (y casi todo hosting gratuito) **bloquea las conexiones SMTP salientes** en su plan gratuito para evitar que se use para spam, así que una conexión SMTP directa a Gmail nunca llega a completarse ahí (falla con "Connection timeout"). Brevo resuelve esto porque envía por una API normal sobre HTTPS (puerto 443), que sí está permitido. El correo puede seguir apareciendo remitido por tu propio Gmail.
 
-A partir de aquí, cada tarea nueva enviará un correo real.
+1. Crea una cuenta gratuita en https://www.brevo.com (no pide tarjeta). El plan gratuito incluye 300 correos/día para siempre.
+2. Ve a **Remitentes** (Senders) en tu cuenta de Brevo y añade tu dirección de Gmail como remitente. Brevo te enviará un correo de confirmación a esa dirección; ábrelo y confirma.
+3. Ve a **SMTP & API** → pestaña **API Keys** y genera una nueva API key (por ejemplo, llámala "gestor-tareas"). Cópiala: solo se muestra una vez.
+4. En tu archivo `.env` (o en las variables de entorno del hosting, ver más abajo):
+   - `BREVO_API_KEY=` la API key que acabas de generar.
+   - `BREVO_SENDER_EMAIL=` la dirección de Gmail que verificaste como remitente en el paso 2.
 
-> Gmail limita el envío a unos 500 correos/día por cuenta, más que suficiente para un equipo normal.
+A partir de aquí, cada tarea nueva enviará un correo real, con tu Gmail como remitente visible.
 
 ---
 
@@ -85,8 +84,8 @@ Render ejecutará la app; Neon (paso 1) guarda los datos. Con esta combinación 
    - `PGSSL` = `true`
    - `ADMIN_PASSWORD`
    - `SESSION_SECRET`
-   - `GMAIL_USER`
-   - `GMAIL_APP_PASSWORD`
+   - `BREVO_API_KEY`
+   - `BREVO_SENDER_EMAIL`
    - `MAIL_FROM_NAME`
    - `NODE_ENV` = `production`
 
